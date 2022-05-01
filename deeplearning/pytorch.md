@@ -841,3 +841,26 @@ tensor([3.1690], requires_grad=True))
 ##### torch.no_grad()
 
 By default, all tensors with `requires_grad=True` are tracking their computational history and support gradient computation. However, there are some cases when we do not need to do that, for example, when we have trained the model and just want to apply it to some input data, i.e. we only want to do *forward* computations through the network. We can stop tracking computations by surrounding our computation code with `torch.no_grad()` block:
+
+##### torch.cuda.device_count()
+
+得到目前可用的GPU的数量。
+
+#### DP 与 DDP 的区别
+
+先看 DP，DP 是单进程控制多 GPU。从之前的程序中，我们也可以看出，DP 将输入的一个 batch 数据分成了 n 份（n 为实际使用的 GPU 数量），分别送到对应的 GPU 进行计算。在网络前向传播时，模型会从主 GPU 复制到其它 GPU 上；在反向传播时，每个 GPU 上的梯度汇总到主 GPU 上，求得梯度均值更新模型参数后，再复制到其它 GPU，以此来实现并行。
+
+由于主 GPU 要进行梯度汇总和模型更新，并将计算任务下发给其它 GPU，所以主 GPU 的负载与使用率会比其它 GPU 高，这就导致了 GPU 负载不均衡的现象。
+
+再说说 DDP，DDP 多进程控制多 GPU。系统会为每个 GPU 创建一个进程，不再有主 GPU，每个 GPU 执行相同的任务。DDP 使用分布式数据采样器（DistributedSampler）加载数据，确保数据在各个进程之间没有重叠。在反向传播时，各 GPU 梯度计算完成后，各进程以广播的方式将梯度进行汇总平均，然后每个进程在各自的 GPU 上进行梯度更新，从而确保每个 GPU 上的模型参数始终保持一致。由于无需在不同 GPU 之间复制模型，DPP 的传输数据量更少，因此速度更快。
+
+DistributedDataParallel 既可用于单机多卡也可用于多机多卡，它能够解决 DataParallel 速度慢、GPU 负载不均衡等问题。因此，官方更推荐使用 DistributedDataParallel 来进行分布式训练，也就是接下来要说的 DDP 训练。
+
+##### optimizer.zero_grad()和model.zero_grad()区别
+
+如果1个优化器对应1个模型的时候(1个优化器可以对应多个模型)。optimizer.zero_grad()与model.zero_grad()是相同的。
+如果是多个模型的时候，就要具体情况具体分析了。如果直接optimizer.zero_grad()的话，就会把所有模型的梯度清零。
+
+##### optimizer.zero_grad()
+
+optimizer.zero_grad()将梯度归零。
